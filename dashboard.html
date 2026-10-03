@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BC-250 Monitor</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1: #fcfcfb;
+    --page: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --s1: #2a78d6;
+    --s2: #eb6834;
+    --s3: #1baf7a;
+    --s4: #eda100;
+    --good: #0ca30c;
+    --warning: #fab219;
+    --serious: #ec835a;
+    --critical: #d03b3b;
+    --shadow: 0 1px 2px rgba(11,11,11,.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-1: #1a1a19;
+      --page: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --muted: #898781;
+      --grid: #2c2c2a;
+      --baseline: #383835;
+      --border: rgba(255,255,255,0.10);
+      --s1: #3987e5;
+      --s2: #d95926;
+      --s3: #199e70;
+      --s4: #c98500;
+      --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255,255,255,0.10);
+    --s1: #3987e5;
+    --s2: #d95926;
+    --s3: #199e70;
+    --s4: #c98500;
+    --shadow: none;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    padding: 20px;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-bottom: 20px; }
+  h1 { font-size: 19px; font-weight: 600; margin: 0; letter-spacing: -.01em; }
+  .host { color: var(--text-secondary); font-size: 13px; }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); margin-left: auto; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+  .dot.stale { background: var(--critical); }
+
+  .ranges { display: flex; gap: 2px; margin-bottom: 18px; flex-wrap: wrap; }
+  .ranges button {
+    font: inherit; font-size: 13px; padding: 5px 12px; cursor: pointer;
+    background: var(--surface-1); color: var(--text-secondary);
+    border: 1px solid var(--border); border-radius: 6px;
+  }
+  .ranges button[aria-pressed="true"] { color: var(--text-primary); font-weight: 600; border-color: var(--baseline); }
+  .ranges button:hover { color: var(--text-primary); }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 22px; }
+  .tile {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; box-shadow: var(--shadow);
+  }
+  .tile .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .tile .value { font-size: 27px; font-weight: 600; letter-spacing: -.02em; margin-top: 3px; }
+  .tile .value .unit { font-size: 14px; font-weight: 400; color: var(--text-secondary); margin-left: 2px; }
+  .tile .sub { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .status { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; margin-top: 3px; }
+  .status svg { flex: none; width: 12px; }
+
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px 10px; box-shadow: var(--shadow); overflow: hidden;
+  }
+  .card.wide { grid-column: 1 / -1; }
+  .card h2 { font-size: 13px; font-weight: 600; margin: 0 0 2px; }
+  .card .hint { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 6px; font-size: 12px; color: var(--text-secondary); }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .swatch { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .plot { position: relative; width: 100%; }
+  svg { display: block; width: 100%; }
+  .tip {
+    position: absolute; pointer-events: none; opacity: 0; transition: opacity .1s;
+    background: var(--surface-1); border: 1px solid var(--baseline); border-radius: 7px;
+    padding: 7px 9px; font-size: 12px; box-shadow: 0 3px 10px rgba(0,0,0,.14);
+    white-space: nowrap; z-index: 5;
+  }
+  .tip .t { color: var(--muted); margin-bottom: 3px; font-size: 11px; }
+  .tip .r { display: flex; align-items: center; gap: 6px; justify-content: space-between; gap: 14px; }
+  .tip .r b { font-variant-numeric: tabular-nums; font-weight: 600; }
+  text { font: 11px system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .tick { fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .dlabel { font-size: 11px; font-weight: 600; }
+  footer { margin-top: 20px; font-size: 12px; color: var(--muted); }
+  .empty { padding: 30px 0; text-align: center; color: var(--muted); font-size: 13px; }
+  table.data { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+  table.data th, table.data td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--grid); }
+  table.data th:first-child, table.data td:first-child { text-align: left; }
+  table.data th { color: var(--muted); font-weight: 500; }
+  details { margin-top: 10px; }
+  summary { font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+  .scroll { overflow-x: auto; max-height: 260px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>BC-250 — Telemetry</h1>
+    <span class="host" id="host">—</span>
+    <span class="live"><span class="dot" id="dot"></span><span id="livetxt">connecting…</span></span>
+  </header>
+
+  <div class="ranges" id="ranges">
+    <button data-r="15m">15 min</button>
+    <button data-r="1h" aria-pressed="true">1 h</button>
+    <button data-r="6h">6 h</button>
+    <button data-r="24h">24 h</button>
+    <button data-r="7d">7 d</button>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card" id="guardcard" style="margin-bottom:14px">
+    <h2>Thermal guard</h2>
+    <p class="hint" id="guardstate">—</p>
+    <div id="events"></div>
+  </div>
+
+  <div class="charts">
+    <div class="card wide">
+      <h2>Temperatures</h2>
+      <p class="hint">Documented critical threshold: 85 °C (GPU) — dashed line.</p>
+      <div class="legend" id="lg-temp"></div>
+      <div class="plot" id="p-temp"></div>
+      <details>
+        <summary>Show data as a table</summary>
+        <div class="scroll"><table class="data" id="tbl-temp"></table></div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2>GPU power</h2>
+      <p class="hint">Instantaneous PPT, in watts.</p>
+      <div class="plot" id="p-pow"></div>
+    </div>
+
+    <div class="card">
+      <h2>GPU clock</h2>
+      <p class="hint">Active SCLK. Hardware range: 1000–2000 MHz.</p>
+      <div class="plot" id="p-sclk"></div>
+    </div>
+
+    <div class="card">
+      <h2>Fan — speed</h2>
+      <p class="hint">Measured on the fan2 header.</p>
+      <div class="plot" id="p-rpm"></div>
+    </div>
+
+    <div class="card">
+      <h2>Fan — PWM duty</h2>
+      <p class="hint">What the BIOS requests. Compare with the measured speed.</p>
+      <div class="plot" id="p-pwm"></div>
+    </div>
+  </div>
+
+  <footer id="foot">—</footer>
+</div>
+
+<script>
+const cs = getComputedStyle(document.documentElement);
+const C = n => cs.getPropertyValue(n).trim();
+let RANGE = "1h", HIST = null, LAST = null, HEALTH = null;
+
+const fmt = (v, d = 0) => v == null ? "—" : Number(v).toFixed(d);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const hhmm = ts => new Date(ts * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+/* axis label: add the date once the window spans more than a day */
+const axisLabel = ts => RANGE === "24h" || RANGE === "7d"
+  ? new Date(ts * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+  : hhmm(ts);
+
+/* ---------- chart engine: one Y scale per chart ---------- */
+function lineChart(el, { x, series, yLabel, unit, dec = 0, threshold = null, yMin = null, yMax = null }) {
+  el.innerHTML = "";
+  const active = series.filter(s => s.data.some(v => v != null));
+  if (!x.length || !active.length) { el.innerHTML = '<div class="empty">No data for this period yet.</div>'; return; }
+
+  const W = el.clientWidth || 600, H = 210;
+  const M = { t: 12, r: 52, b: 22, l: 42 };
+  const iw = W - M.l - M.r, ih = H - M.t - M.b;
+
+  let lo = Infinity, hi = -Infinity;
+  active.forEach(s => s.data.forEach(v => { if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }));
+  if (threshold != null) hi = Math.max(hi, threshold);
+  if (yMin != null) lo = Math.min(lo, yMin);
+  if (yMax != null) hi = Math.max(hi, yMax);
+  const pad = (hi - lo) * 0.12 || 1;
+  lo = Math.floor(lo - pad); hi = Math.ceil(hi + pad);
+
+  const px = i => M.l + (x.length === 1 ? iw / 2 : (i / (x.length - 1)) * iw);
+  const py = v => M.t + ih - ((v - lo) / (hi - lo)) * ih;
+
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("height", H);
+  svg.setAttribute("role", "img");
+  svg.setAttribute("aria-label", `${yLabel} over time`);
+  const mk = (t, a) => { const e = document.createElementNS(ns, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+
+  /* grid + Y ticks */
+  const TICKS = 4;
+  for (let i = 0; i <= TICKS; i++) {
+    const v = lo + (hi - lo) * i / TICKS, y = py(v);
+    svg.appendChild(mk("line", { x1: M.l, x2: M.l + iw, y1: y, y2: y, stroke: C("--grid"), "stroke-width": 1 }));
+    const tx = mk("text", { x: M.l - 7, y: y + 3.5, "text-anchor": "end", class: "tick" });
+    tx.textContent = fmt(v, dec); svg.appendChild(tx);
+  }
+  /* X axis */
+  svg.appendChild(mk("line", { x1: M.l, x2: M.l + iw, y1: M.t + ih, y2: M.t + ih, stroke: C("--baseline"), "stroke-width": 1 }));
+  [0, Math.floor(x.length / 2), x.length - 1].filter((v, i, a) => a.indexOf(v) === i).forEach(i => {
+    const t = mk("text", { x: px(i), y: H - 6, "text-anchor": i === 0 ? "start" : i === x.length - 1 ? "end" : "middle", class: "tick" });
+    t.textContent = axisLabel(x[i]); svg.appendChild(t);
+  });
+
+  /* critical threshold — dashed line + label (never colour alone) */
+  if (threshold != null && threshold >= lo && threshold <= hi) {
+    svg.appendChild(mk("line", { x1: M.l, x2: M.l + iw, y1: py(threshold), y2: py(threshold), stroke: C("--critical"), "stroke-width": 1.5, "stroke-dasharray": "5 4" }));
+    const lb = mk("text", { x: M.l + iw + 5, y: py(threshold) + 3.5, fill: C("--critical"), class: "dlabel" });
+    lb.textContent = threshold + unit; svg.appendChild(lb);
+  }
+
+  /* lines */
+  active.forEach(s => {
+    let d = "", pen = false;
+    s.data.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? "L" : "M") + px(i) + " " + py(v); pen = true; });
+    svg.appendChild(mk("path", { d, fill: "none", stroke: s.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }));
+  });
+
+  /* direct labels (identity never carried by colour alone) */
+  if (active.length > 1) {
+    const ends = active.map(s => {
+      for (let i = s.data.length - 1; i >= 0; i--) if (s.data[i] != null) return { s, v: s.data[i], y: py(s.data[i]) };
+      return null;
+    }).filter(Boolean).sort((a, b) => a.y - b.y);
+    ends.forEach((e, i) => { if (i && e.y - ends[i - 1].y < 12) e.y = ends[i - 1].y + 12; });
+    ends.forEach(e => {
+      const t = mk("text", { x: M.l + iw + 5, y: e.y + 3.5, fill: e.s.color, class: "dlabel" });
+      t.textContent = fmt(e.v, dec); svg.appendChild(t);
+    });
+  }
+
+  /* hover layer: crosshair + tooltip */
+  const cross = mk("line", { y1: M.t, y2: M.t + ih, stroke: C("--baseline"), "stroke-width": 1, opacity: 0 });
+  svg.appendChild(cross);
+  const dots = active.map(s => { const c = mk("circle", { r: 4, fill: s.color, stroke: C("--surface-1"), "stroke-width": 2, opacity: 0 }); svg.appendChild(c); return c; });
+  const hit = mk("rect", { x: M.l, y: M.t, width: iw, height: ih, fill: "transparent" });
+  svg.appendChild(hit);
+  el.appendChild(svg);
+
+  const tip = document.createElement("div"); tip.className = "tip"; el.appendChild(tip);
+  hit.addEventListener("pointermove", ev => {
+    const r = svg.getBoundingClientRect(), sx = (ev.clientX - r.left) * (W / r.width);
+    let i = Math.round(((sx - M.l) / iw) * (x.length - 1));
+    i = Math.max(0, Math.min(x.length - 1, i));
+    cross.setAttribute("x1", px(i)); cross.setAttribute("x2", px(i)); cross.setAttribute("opacity", 1);
+    active.forEach((s, k) => {
+      const v = s.data[i];
+      if (v == null) { dots[k].setAttribute("opacity", 0); return; }
+      dots[k].setAttribute("cx", px(i)); dots[k].setAttribute("cy", py(v)); dots[k].setAttribute("opacity", 1);
+    });
+    tip.innerHTML = `<div class="t">${new Date(x[i] * 1000).toLocaleString()}</div>` +
+      active.map(s => `<div class="r"><span><span class="swatch" style="background:${s.color};display:inline-block"></span> ${s.name}</span><b>${fmt(s.data[i], dec)}${unit}</b></div>`).join("");
+    tip.style.opacity = 1;
+    const rel = px(i) * (r.width / W);
+    tip.style.left = Math.min(Math.max(0, rel - tip.offsetWidth / 2), r.width - tip.offsetWidth) + "px";
+    tip.style.top = "4px";
+  });
+  hit.addEventListener("pointerleave", () => {
+    tip.style.opacity = 0; cross.setAttribute("opacity", 0); dots.forEach(d => d.setAttribute("opacity", 0));
+  });
+}
+
+/* ---------- status badges: icon + label, never colour alone ---------- */
+const ICONS = {
+  good: '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2.5 6.2l2.4 2.4 4.6-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  warning: '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1.6l4.8 8.4H1.2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M6 5v2.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="6" cy="8.7" r=".8" fill="currentColor"/></svg>',
+  critical: '<svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.8" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 3.4v3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="6" cy="8.7" r=".8" fill="currentColor"/></svg>'
+};
+function tempStatus(v) {
+  if (v == null) return null;
+  if (v >= 85) return { k: "critical", txt: "Above threshold" };
+  if (v >= 78) return { k: "warning", txt: "Low headroom" };
+  return { k: "good", txt: "In range" };
+}
+
+function tile(label, value, unit, sub, status) {
+  const st = status ? `<div class="status" style="color:var(--${status.k})">${ICONS[status.k]}<span>${status.txt}</span></div>` : "";
+  return `<div class="tile"><div class="label">${label}</div>
+    <div class="value">${value}<span class="unit">${unit || ""}</span></div>
+    ${sub ? `<div class="sub">${sub}</div>` : ""}${st}</div>`;
+}
+
+function renderKPIs(c) {
+  const o = c.ollama || {};
+  document.getElementById("kpis").innerHTML = [
+    tile("GPU (edge)", fmt(c.gpu_edge, 1), " °C", null, tempStatus(c.gpu_edge)),
+    tile("CPU (Tctl)", fmt(c.tctl, 1), " °C", null, tempStatus(c.tctl)),
+    tile("SoC (TSI)", fmt(c.tsi, 1), " °C", "hottest sensor", tempStatus(c.tsi)),
+    tile("Power", fmt(c.power_w, 1), " W", `vddgfx ${fmt(c.vddgfx)} mV`),
+    tile("Fan", fmt(c.fan_rpm), " rpm", `PWM duty ${c.pwm == null ? "—" : Math.round(c.pwm / 255 * 100) + " %"}`),
+    tile("SCLK", fmt(c.sclk), " MHz", o.model ? `${esc(o.model)} · ${o.vram_mb} MB` : "no model loaded")
+  ].join("");
+}
+
+function renderCharts() {
+  if (!HIST) return;
+  const h = HIST, x = h.ts;
+  const temps = [
+    { name: "GPU (edge)", data: h.gpu_edge, color: C("--s1") },
+    { name: "CPU (Tctl)", data: h.tctl, color: C("--s2") },
+    { name: "SoC (TSI)", data: h.tsi, color: C("--s3") },
+    { name: "Board (therm. 14)", data: h.therm14, color: C("--s4") }
+  ];
+  document.getElementById("lg-temp").innerHTML = temps
+    .map(s => `<span><span class="swatch" style="background:${s.color}"></span>${s.name}</span>`).join("");
+
+  lineChart(document.getElementById("p-temp"), { x, series: temps, yLabel: "Temperatures", unit: " °C", dec: 0, threshold: 85 });
+  lineChart(document.getElementById("p-pow"), { x, series: [{ name: "PPT", data: h.power_w, color: C("--s1") }], yLabel: "Power", unit: " W", dec: 0 });
+  lineChart(document.getElementById("p-sclk"), { x, series: [{ name: "SCLK", data: h.sclk, color: C("--s1") }], yLabel: "Clock", unit: " MHz", dec: 0, yMin: 1000, yMax: 2000 });
+  lineChart(document.getElementById("p-rpm"), { x, series: [{ name: "Speed", data: h.fan_rpm, color: C("--s1") }], yLabel: "Fan speed", unit: " rpm", dec: 0 });
+  lineChart(document.getElementById("p-pwm"), {
+    x, series: [{ name: "PWM", data: h.pwm.map(v => v == null ? null : v / 255 * 100), color: C("--s1") }],
+    yLabel: "PWM duty", unit: " %", dec: 0, yMin: 0, yMax: 100
+  });
+
+  /* table view — the colour-free alternative, for accessibility */
+  const idx = [...Array(Math.min(40, x.length)).keys()].map(i => x.length - 1 - i);
+  document.getElementById("tbl-temp").innerHTML =
+    "<tr><th>Time</th><th>GPU</th><th>CPU</th><th>SoC</th><th>Board</th><th>W</th><th>rpm</th></tr>" +
+    idx.map(i => `<tr><td>${hhmm(x[i])}</td><td>${fmt(h.gpu_edge[i], 1)}</td><td>${fmt(h.tctl[i], 1)}</td><td>${fmt(h.tsi[i], 1)}</td><td>${fmt(h.therm14[i], 1)}</td><td>${fmt(h.power_w[i], 1)}</td><td>${fmt(h.fan_rpm[i])}</td></tr>`).join("");
+}
+
+async function pollCurrent() {
+  try {
+    const c = await (await fetch("/api/current")).json();
+    LAST = c; renderKPIs(c);
+    document.getElementById("dot").classList.remove("stale");
+    document.getElementById("livetxt").textContent = "live · " + new Date().toLocaleTimeString();
+    if (c.uptime) {
+      const u = Math.floor(c.uptime);
+      document.getElementById("host").textContent =
+        `up ${Math.floor(u / 86400)} d ${Math.floor(u % 86400 / 3600)} h ${Math.floor(u % 3600 / 60)} min`;
+    }
+  } catch (e) {
+    document.getElementById("dot").classList.add("stale");
+    document.getElementById("livetxt").textContent = "offline";
+  }
+}
+
+async function pollGuard() {
+  try {
+    const [h, ev] = await Promise.all([
+      (await fetch("/api/health")).json(),
+      (await fetch("/api/events")).json()
+    ]);
+    HEALTH = h;
+    document.getElementById("guardstate").textContent = h.guard
+      ? `Active — warning at ${h.warn} °C, models unloaded at ${h.crit} °C (removes the heat source without stopping any service).`
+      : "Disabled.";
+    const el = document.getElementById("events");
+    if (!ev.length) { el.innerHTML = '<div class="sub" style="color:var(--muted);font-size:12px">No events recorded.</div>'; return; }
+    el.innerHTML = '<table class="data"><tr><th>Time</th><th>Level</th><th>Temp.</th><th>Detail</th></tr>' +
+      ev.slice(0, 8).map(e => {
+        const k = e.level === "critical" ? "critical" : "warning";
+        return `<tr><td>${new Date(e.ts * 1000).toLocaleString()}</td>
+        <td style="text-align:left"><span class="status" style="color:var(--${k});margin:0">${ICONS[k]}<span>${e.level === "critical" ? "Unload" : "Warning"}</span></span></td>
+        <td>${e.temp == null ? "—" : e.temp.toFixed(1) + " °C"}</td>
+        <td style="text-align:left">${esc(e.detail)}</td></tr>`;
+      }).join("") + "</table>";
+  } catch (e) { /* retried on next poll */ }
+}
+
+async function pollHistory() {
+  try {
+    HIST = await (await fetch("/api/history?range=" + RANGE)).json();
+    renderCharts();
+    document.getElementById("foot").textContent =
+      `${HIST.ts.length} points shown` +
+      (HEALTH ? ` · sampled every ${HEALTH.interval} s · ${HEALTH.retention_days}-day retention` : "") +
+      ` · window ${RANGE}`;
+  } catch (e) { /* the next poll retries */ }
+}
+
+document.getElementById("ranges").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  RANGE = b.dataset.r;
+  [...e.currentTarget.children].forEach(c => c.setAttribute("aria-pressed", c === b));
+  pollHistory();
+});
+
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(renderCharts, 160); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => setTimeout(renderCharts, 60));
+
+pollCurrent(); pollGuard().then(pollHistory);
+setInterval(pollCurrent, 3000);
+setInterval(pollHistory, 15000);
+setInterval(pollGuard, 15000);
+</script>
