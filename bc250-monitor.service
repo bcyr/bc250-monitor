@@ -1,6 +1,6 @@
 [Unit]
 Description=BC-250 thermal telemetry and guard
-After=network.target ollama.service
+After=network.target
 
 [Service]
 Type=simple
